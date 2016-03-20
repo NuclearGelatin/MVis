@@ -21,6 +21,16 @@
 
 #include <type_traits>
 
+template<class Number, class Number2>//compilers often change numbers to
+Number range_limit(const Number& n, const Number2& min, const Number2& max){
+    if(n>max)
+        return max;
+    if(n<min)
+        return min;
+    return n;
+}
+
+
 //todo: make the function plotter a subclass of this class and make this class only be a parent.
 namespace mvis{
     template <class Number>
@@ -36,8 +46,8 @@ namespace mvis{
             table->AddColumn(x_axis);
 
             bg_color[0] = 1.0;
-            bg_color[1] = 0.8;
-            bg_color[2] = 0.3;
+            bg_color[1] = 0.95;
+            bg_color[2] = 0.9;
 
         }
 
@@ -50,6 +60,11 @@ namespace mvis{
 
         typedef std::vector<function_pair> function_vector;
 
+        template <class N>
+        N color_limit(const N& n){
+            return range_limit(n, 0.0, 255.0);
+        }
+
         void addFunction(const char* function_name,
                          function_type function){
             vtkSmartPointer<vtkFloatArray> column = vtkSmartPointer<vtkFloatArray>::New();
@@ -58,12 +73,6 @@ namespace mvis{
             function_list.push_back(
                     function_pair(column, function)//pass in function by value for speed
             );
-            //todo: allow changing line color and theme
-            line_design.push_back(255);
-            line_design.push_back(10*line_design.size());
-            line_design.push_back(2*line_design.size());
-            line_design.push_back(255);
-            line_design.push_back(1.0);
         }
 
         //todo: go back to single function method and have 2 different vectors(for single and multi) later
@@ -100,8 +109,21 @@ namespace mvis{
                 line->SetInputData(table, 0, i+1);
 #endif
 
-                line->SetColor(line_design[i*5+0], line_design[i*5+1], line_design[i*5+2], line_design[i*5+3]);
-                line->SetWidth(line_design[i*5+4]);
+                float brightness = (float)(i*255)/function_list.size();
+
+                float material_red = 255;
+                float material_green = 127;
+                float material_blue = 12;
+
+                double red = brightness /
+                             (0.30 + 0.59*(material_green/material_red) + 0.11*(material_blue/material_red));
+                double green = brightness /
+                               (0.30*(material_red/material_green) + 0.59 + 0.11*(material_blue/material_green));
+                double blue = brightness /
+                              (0.30*(material_red/material_blue) + 0.59*(material_green/material_blue) + 0.11);
+
+                line->SetColor(color_limit(red), color_limit(green), color_limit(blue), 255);
+                line->SetWidth(1.0);
                 line = chart->AddPlot(vtkChart::LINE);
             }
 
@@ -125,7 +147,6 @@ namespace mvis{
 
 
         vtkSmartPointer<vtkChartXY> chart;
-        std::vector<float> line_design;
     };
 }
 
@@ -134,6 +155,12 @@ int main() {
     mvis::Graph<float> graph;
 
     graph.addFunction("fib", mvis::fib<float>);
+    graph.addFunction("x", [](const float& x){return x;});
+    graph.addFunction("x^2", [](const float& x){return x*x;});
+    graph.addFunction("15log2x", [](const float& x){return 15*std::log2(x);});
+    graph.addFunction("50sin x", [](const float& x){return 50*std::sin(x);});
+    graph.addFunction("5/x", [](const float& x){return 5/x;});
+    graph.addFunction("50cos x", [](const float& x){return 50*std::cos(x);});
 
     graph.calcRegion(0, 10, 0.1);
 

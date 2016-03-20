@@ -6,7 +6,12 @@
 #include <vtkRenderWindowInteractor.h>
 #include <vtkRenderWindow.h>
 #include <vtkSmartPointer.h>
+
+#include <vtkAxis.h>
+#include <vtkTextProperty.h>
+#include <vtkChartLegend.h>
 #include <vtkChartXY.h>
+
 #include <vtkTable.h>
 #include <vtkPlot.h>
 #include <vtkFloatArray.h>
@@ -31,6 +36,12 @@ Number range_limit(const Number& n, const Number2& min, const Number2& max){
     return n;
 }
 //todo:put color stuff in its own file
+
+template<class Number>
+Number get_luma_from_rgb(const Number& r, const Number& g, const Number& b){
+    return (Number)0.3*r + (Number)0.59*g + (Number)0.11*b;
+}
+
 template<class Number>
 Number get_hue_from_rgb(const Number& red, const Number& green, const Number& blue){
 
@@ -59,13 +70,10 @@ Number get_hue_from_rgb(const Number& red, const Number& green, const Number& bl
 template<class Number>
 std::array<Number, 3> get_rgb_from_hsv(const Number& hue, const Number& sat, const Number& val) {
     Number c = (val * sat) / 100.0;
-    std::cout << "c: " << c << "\n";
 
     Number h_mod = hue/(float)60.0;
-    std::cout << "h_mod: " << h_mod << "\n";
 
     Number x = c*(1.0-std::abs(std::fmod(h_mod, (float)2.0)-1.0));
-    std::cout << "x: " << x << "\n";
 
     //todo: deal with undefined hue
     Number r,g,b;
@@ -102,27 +110,80 @@ ostream& operator<<(ostream& o, const std::array<T, N>& arr)
 
 //todo: make the function plotter a subclass of this class and make this class only be a parent.
 namespace mvis{
+
+    //subclass of chartXY so I can do more stuff
+    class ChartXY : public vtkChartXY{
+    public:
+        vtkTypeMacro(ChartXY, vtkChartXY);
+
+        static ChartXY *New(){
+            return new ChartXY();
+        }
+
+        vtkChartLegend* GetLegend(){
+            return Legend.Get();
+        }
+
+        void SetLegendTextColor(double r, double g, double b){
+            GetLegend()->GetLabelProperties()->SetColor(r, g, b);//the legend with te function names
+            if(GetAxis(vtkAxis::LEFT)) {
+                GetAxis(vtkAxis::LEFT)->GetLabelProperties()->SetColor(r, g, b);//the axis numbers
+                GetAxis(vtkAxis::LEFT)->GetTitleProperties()->SetColor(r, g, b);//the axis title
+            }
+            if(GetAxis(vtkAxis::BOTTOM)) {
+                GetAxis(vtkAxis::BOTTOM)->GetLabelProperties()->SetColor(r, g, b);//the axis numbers
+                GetAxis(vtkAxis::BOTTOM)->GetTitleProperties()->SetColor(r, g, b);//the axis title
+            }
+            if(GetAxis(vtkAxis::RIGHT)) {
+                GetAxis(vtkAxis::RIGHT)->GetLabelProperties()->SetColor(r, g, b);//the axis numbers
+                GetAxis(vtkAxis::RIGHT)->GetTitleProperties()->SetColor(r, g, b);//the axis title
+            }
+            if(GetAxis(vtkAxis::TOP)) {
+                GetAxis(vtkAxis::TOP)->GetLabelProperties()->SetColor(r, g, b);//the axis numbers
+                GetAxis(vtkAxis::TOP)->GetTitleProperties()->SetColor(r, g, b);//the axis title
+            }
+            if(GetAxis(vtkAxis::PARALLEL)) {
+                GetAxis(vtkAxis::PARALLEL)->GetLabelProperties()->SetColor(r, g, b);//the axis numbers
+                GetAxis(vtkAxis::PARALLEL)->GetTitleProperties()->SetColor(r, g, b);//the axis title
+            }
+
+            double * color = GetLegend()->GetLabelProperties()->GetColor();
+            std::cout<<"color:"<<color[0]<<","<<color[1]<<","<<color[2]<<"\n";
+        }
+    };
+
     template <class Number>
     class Graph{
     public:
-        Graph(float r=255, float g=187, float b=28, const char* x_axis_label = "X Axis"):
+        Graph(double r=134, double g=67, double b=67, const char* x_axis_label = "X Axis"):
                 table(vtkSmartPointer<vtkTable>::New()),
                 x_axis(vtkSmartPointer<vtkFloatArray>::New()),
                 view(vtkSmartPointer<vtkContextView>::New()),
-                chart(vtkSmartPointer<vtkChartXY>::New()),
+                chart(vtkSmartPointer<mvis::ChartXY>::New()),
                 material_red(r), material_green(g), material_blue(b)
         {
+            bg_red=r;
+            bg_green=g;
+            bg_blue=b;
+            double hue =get_hue_from_rgb(r,g,b);
+            double lum = get_luma_from_rgb(r,g,b);
+
+            //todo: set up a scroll bar that allows for changing color and find the best values there
+            if(lum<170 && lum>85){
+                std::array<double, 3> text_rgb = get_rgb_from_hsv(hue,(double)100,(double)50);
+                chart->SetLegendTextColor(text_rgb[0], text_rgb[1], text_rgb[2]);
+            }else{//lum<=85
+                chart->SetLegendTextColor(1.0, 1.0, 1.0);
+            }
+
             x_axis->SetName(x_axis_label);
             table->AddColumn(x_axis);
 
-            float hue =get_hue_from_rgb(r,g,b);
-            std::cout<<hue<<"\n";
-            std::array<float, 3> bg_rgb = get_rgb_from_hsv(hue,(float)20,(float)95);
+            /*std::array<float, 3> bg_rgb = get_rgb_from_hsv(hue,(float)20,(float)95);
             bg_red = bg_rgb[0];
             bg_green = bg_rgb[1];
-            bg_blue = bg_rgb[2];
+            bg_blue = bg_rgb[2];*/
 
-            std::cout<<"bgrgb"<<bg_rgb<<"\n";
         }
 
         typedef std::function< Number(Number& x)>function_type;
@@ -172,6 +233,7 @@ namespace mvis{
 
             //chart->GetAxis(vtkAxis::BOTTOM)->GetLabelProperties()->SetColor(1.0,1.0,1.0);
 
+
             for(int i=0; i<function_list.size();++i) {
                 vtkPlot *line = chart->AddPlot(vtkChart::LINE);
 
@@ -184,9 +246,7 @@ namespace mvis{
 #endif
 
                 float val = std::min(((float)(2*i)/(function_list.size())), (float)1.0);
-                std::cout<<"val"<<val<<"\n";
                 float sat = std::min(1-(((float)(2*i)/(function_list.size()))-1), (float)1.0);
-                std::cout<<"sat"<<sat<<"\n";
 
                 float hue =get_hue_from_rgb(material_red,material_green,material_blue);
                 std::array<float, 3> rgb = get_rgb_from_hsv(hue, sat*60+40, val*80+20);
@@ -218,7 +278,7 @@ namespace mvis{
         double bg_green;
         double bg_blue;
 
-        vtkSmartPointer<vtkChartXY> chart;
+        vtkSmartPointer<mvis::ChartXY> chart;
     };
 }
 

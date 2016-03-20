@@ -21,6 +21,7 @@
 
 #include <type_traits>
 
+//todo:put util stuff in utility.hpp
 template<class Number, class Number2>//compilers often change numbers to
 Number range_limit(const Number& n, const Number2& min, const Number2& max){
     if(n>max)
@@ -29,26 +30,99 @@ Number range_limit(const Number& n, const Number2& min, const Number2& max){
         return min;
     return n;
 }
+//todo:put color stuff in its own file
+template<class Number>
+Number get_hue_from_rgb(const Number& red, const Number& green, const Number& blue){
 
+    Number hue_degrees;
+    if(red>=green){
+        if(green>=blue){//R>=G>=B
+            hue_degrees = 60.0 * (green-blue)/(red-blue);
+        }else if(blue>red){//B>R>=G
+            hue_degrees = 60.0 * (4.0+ (red-green)/(blue-green));
+        }else{//R>=B>G
+            hue_degrees = 60.0 * (6.0- (blue-green)/(red-green));
+        }
+    }else{
+        if(red>=blue){//G>R>=B
+            hue_degrees = 60.0 * (2.0- (red-blue)/(green-blue));
+        }else if(blue>green){//B>G>R
+            hue_degrees = 60.0 * (4.0- (green-red)/(blue-red));
+        }else{//G>=B>R
+            hue_degrees = 60.0 * (2.0+ (blue-red)/(green-red));
+        }
+    }
+
+    return hue_degrees;
+}
+
+template<class Number>
+std::array<Number, 3> get_rgb_from_hsv(const Number& hue, const Number& sat, const Number& val) {
+    Number c = (val * sat) / 100.0;
+    std::cout << "c: " << c << "\n";
+
+    Number h_mod = hue/(float)60.0;
+    std::cout << "h_mod: " << h_mod << "\n";
+
+    Number x = c*(1.0-std::abs(std::fmod(h_mod, (float)2.0)-1.0));
+    std::cout << "x: " << x << "\n";
+
+    //todo: deal with undefined hue
+    Number r,g,b;
+    if(h_mod>=50){
+        r=c;g=0;b=x;
+    }else if(h_mod>=4){
+        r=x;g=0;b=c;
+    }else if(h_mod>=3){
+        r=0;g=x;b=c;
+    }else if(h_mod>=2){
+        r=0;g=c;b=x;
+    }else if(h_mod>=1){
+        r=x;g=c;b=0;
+    }else if(h_mod>=0){
+        r=c;g=x;b=0;
+    }else {
+        r = 0;
+        g = 0;
+        b = 0;
+    }
+
+    Number m=val-c;
+
+    std::array<Number, 3> rgb={{(r+m)*2.55, (g+m)*2.55, (b+m)*2.55}};
+    return rgb;
+}
+
+template <class T, std::size_t N>
+ostream& operator<<(ostream& o, const std::array<T, N>& arr)
+{
+    copy(arr.cbegin(), arr.cend(), std::ostream_iterator<T>(o, " "));
+    return o;
+}
 
 //todo: make the function plotter a subclass of this class and make this class only be a parent.
 namespace mvis{
     template <class Number>
     class Graph{
     public:
-        Graph(const char* x_axis_label = "X Axis"):
+        Graph(float r=255, float g=187, float b=28, const char* x_axis_label = "X Axis"):
                 table(vtkSmartPointer<vtkTable>::New()),
                 x_axis(vtkSmartPointer<vtkFloatArray>::New()),
                 view(vtkSmartPointer<vtkContextView>::New()),
-                chart(vtkSmartPointer<vtkChartXY>::New())
+                chart(vtkSmartPointer<vtkChartXY>::New()),
+                material_red(r), material_green(g), material_blue(b)
         {
             x_axis->SetName(x_axis_label);
             table->AddColumn(x_axis);
 
-            bg_color[0] = 1.0;
-            bg_color[1] = 0.95;
-            bg_color[2] = 0.9;
+            float hue =get_hue_from_rgb(r,g,b);
+            std::cout<<hue<<"\n";
+            std::array<float, 3> bg_rgb = get_rgb_from_hsv(hue,(float)20,(float)95);
+            bg_red = bg_rgb[0];
+            bg_green = bg_rgb[1];
+            bg_blue = bg_rgb[2];
 
+            std::cout<<"bgrgb"<<bg_rgb<<"\n";
         }
 
         typedef std::function< Number(Number& x)>function_type;
@@ -93,7 +167,7 @@ namespace mvis{
         }
 
         void setupView(){
-            view->GetRenderer()->SetBackground(bg_color[0],bg_color[1],bg_color[2]);
+            view->GetRenderer()->SetBackground(bg_red/255.0,bg_green/255.0,bg_blue/255.0);
             view->GetScene()->AddItem(chart);
 
             //chart->GetAxis(vtkAxis::BOTTOM)->GetLabelProperties()->SetColor(1.0,1.0,1.0);
@@ -109,20 +183,14 @@ namespace mvis{
                 line->SetInputData(table, 0, i+1);
 #endif
 
-                float brightness = (float)(i*255)/function_list.size();
+                float val = std::min(((float)(2*i)/(function_list.size())), (float)1.0);
+                std::cout<<"val"<<val<<"\n";
+                float sat = std::min(1-(((float)(2*i)/(function_list.size()))-1), (float)1.0);
+                std::cout<<"sat"<<sat<<"\n";
 
-                float material_red = 255;
-                float material_green = 127;
-                float material_blue = 12;
-
-                double red = brightness /
-                             (0.30 + 0.59*(material_green/material_red) + 0.11*(material_blue/material_red));
-                double green = brightness /
-                               (0.30*(material_red/material_green) + 0.59 + 0.11*(material_blue/material_green));
-                double blue = brightness /
-                              (0.30*(material_red/material_blue) + 0.59*(material_green/material_blue) + 0.11);
-
-                line->SetColor(color_limit(red), color_limit(green), color_limit(blue), 255);
+                float hue =get_hue_from_rgb(material_red,material_green,material_blue);
+                std::array<float, 3> rgb = get_rgb_from_hsv(hue, sat*60+40, val*80+20);
+                line->SetColor(color_limit(rgb[0]), color_limit(rgb[1]), color_limit(rgb[2]), 255);
                 line->SetWidth(1.0);
                 line = chart->AddPlot(vtkChart::LINE);
             }
@@ -137,14 +205,18 @@ namespace mvis{
     private:
         vtkSmartPointer<vtkTable> table;
         vtkSmartPointer<vtkFloatArray> x_axis;
-    private:
 
         function_vector function_list;
 
         vtkSmartPointer<vtkContextView> view;
-        float bg_color[3];
 
+        float material_red;
+        float material_green;
+        float material_blue;
 
+        double bg_red;
+        double bg_green;
+        double bg_blue;
 
         vtkSmartPointer<vtkChartXY> chart;
     };
@@ -157,10 +229,8 @@ int main() {
     graph.addFunction("fib", mvis::fib<float>);
     graph.addFunction("x", [](const float& x){return x;});
     graph.addFunction("x^2", [](const float& x){return x*x;});
-    graph.addFunction("15log2x", [](const float& x){return 15*std::log2(x);});
-    graph.addFunction("50sin x", [](const float& x){return 50*std::sin(x);});
-    graph.addFunction("5/x", [](const float& x){return 5/x;});
-    graph.addFunction("50cos x", [](const float& x){return 50*std::cos(x);});
+    graph.addFunction("2x", [](const float& x){return x*2;});
+    graph.addFunction("2x^2", [](const float& x){return x*x*2;});
 
     graph.calcRegion(0, 10, 0.1);
 

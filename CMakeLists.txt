@@ -13,7 +13,7 @@ link_libraries(${VTK_LIBRARIES})
 
 set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -std=c++11")
 
-set(SOURCE_FILES main.cpp)
+set(SOURCE_FILES main.cpp MathFunctions.hpp)
 add_executable(MVis ${SOURCE_FILES})
 
 

@@ -104,10 +104,12 @@ namespace mvis{
                 table(vtkSmartPointer<vtkTable>::New()),
                 x_axis(vtkSmartPointer<vtkFloatArray>::New()),
                 view(vtkSmartPointer<vtkContextView>::New()),
-                chart(vtkSmartPointer<mvis::ChartXY>::New()),
-                bg_red(0), bg_green(0), bg_blue(0)
+                chart(vtkSmartPointer<mvis::ChartXY>::New())
         {
+            x_axis->SetName("x axis");//vtk segfaults if there's not a name
             table->AddColumn(x_axis);
+
+            setBGColor(27,12,7);
         }
 
         void setBottomAxisTitle(const char* title){

@@ -23,6 +23,7 @@
 
 #include <boost/any.hpp>
 #include <boost/variant.hpp>
+#include <boost/signals2.hpp>
 
 #include "utility.hpp"
 #include "color.hpp"
@@ -54,6 +55,16 @@ namespace mvis{
                 GetAxis(vtk_axis)->GetLabelProperties()->SetColor(r, g, b);//the axis numbers
                 GetAxis(vtk_axis)->GetTitleProperties()->SetColor(r, g, b);//the axis title
             }
+        }
+
+        //todo: replace with std signals
+        boost::signals2::signal<void (double, double)> update_signal;
+
+        void Update(){
+            vtkChartXY::Update();
+            double range[2];
+            GetAxis(vtkAxis::BOTTOM)->GetUnscaledRange(range);
+            update_signal(range[0], range[1]);
         }
 
         void SetTextColor(double r, double g, double b){
@@ -108,6 +119,10 @@ namespace mvis{
         {
             x_axis->SetName("x axis");//vtk segfaults if there's not a name
             table->AddColumn(x_axis);
+
+            chart->update_signal.connect(
+                    std::bind(&Graph::updateCalc, this, std::placeholders::_1, std::placeholders::_2)
+            );
 
             setBGColor(17,17,17);
         }
@@ -175,7 +190,34 @@ namespace mvis{
             }
         }
 
+        void updateCalc(double x_min, double x_max){
+            if(x_min>x_max) return;
+            double x_increment = (x_max-x_min)/100;//just do 100 points for now
+
+            size_t num_points = (Number)(x_max - x_min) / x_increment;
+
+            table->SetNumberOfRows(num_points);
+            //todo: update from left to right in increasing amounts of clarity
+            //todo: check if (close enough) x values are already in table and therefore were already calculated
+            //todo: clear old table?
+            for(int i=0; i<num_points;++i){
+                Number x_value = (Number)i*x_increment + x_min;
+                table->SetValue(i, 0, x_value); // set x axis
+                int l=0;
+                for(int j=0; j< function_group_list.size(); ++j){
+                    for(int k=0; k<function_group_list[j].first.size(); ++k, ++l){
+                        Number f_value = function_group_list[j].first[k].second(x_value);
+                        table->SetValue(i, l+1, f_value);
+                    }
+                }
+            }
+            table->Modified();
+
+        }
+
         void calcRegion(const size_t& x_min, const size_t& x_max, const Number& x_increment){
+
+
             if(x_min>x_max) return;
 
             size_t num_points = (Number)(x_max - x_min) / x_increment;
@@ -214,26 +256,22 @@ namespace mvis{
                     //todo: make this its own function
                     double hue, sat, val;
                     do {
+                        //credit: www.snook.ca/technical/colour_contrast/colour.html
                         double mid = mvis::util::ith_middle(j + c, 0.0, 160.0);
                         hue = function_group_list[i].second;
                         val = std::max(std::min(mid, 100.0), 20.0);
                         sat = 100.0 - std::max(mid - 80.0, 0.0);
-                        std::cout<<"val:"<<val<<"\n";
-                        std::cout<<"sat:"<<sat<<"\n";
                         std::array<double, 3> rgb = mvis::color::get_rgb_from_hsv(hue, sat, val);
                         //std::cout<<"rgb:"<<rgb<<"\n";
                         double lum_fg = mvis::color::get_luminance_from_rgb(rgb[0]/255.0,rgb[1]/255.0,rgb[2]/255.0);
                         double lum_bg = mvis::color::get_luminance_from_rgb(bg_red/255.0, bg_green/255.0, bg_blue/255.0);
 
-                        std::cout<<"lum_fg:"<<lum_fg<<"\n";
-                        std::cout<<"lum_bg:"<<lum_bg<<"\n";
                         double ratio=0;
                         if(lum_fg >= lum_bg){
                             ratio = (lum_fg+.05) / (lum_bg + .05);
                         } else{
                             ratio = (lum_bg + .05) / (lum_fg + .05);
                         }
-                        std::cout<<"ratio: "<<ratio<<"\n";
 
                         if(ratio<3.0){
                             ++c;

@@ -109,7 +109,7 @@ namespace mvis{
             x_axis->SetName("x axis");//vtk segfaults if there's not a name
             table->AddColumn(x_axis);
 
-            setBGColor(27,12,7);
+            setBGColor(17,17,17);
         }
 
         void setBottomAxisTitle(const char* title){
@@ -129,7 +129,11 @@ namespace mvis{
             double lum = mvis::color::get_luma_from_rgb(r,g,b);
 
             //todo: set up a scroll bar that allows for changing color and find the best values there
-            if(lum<170 && lum>85){
+
+            if(lum>=170){
+                chart->SetTextColor(0.0, 0.0, 0.0);
+            }
+            else if(lum<170 && lum>85){
                 std::array<double, 3> text_rgb = mvis::color::get_rgb_from_hsv(hue,(double)100.0,(double)50.0);
                 chart->SetTextColor(text_rgb[0], text_rgb[1], text_rgb[2]);
             }else{//lum<=85
@@ -138,11 +142,7 @@ namespace mvis{
         }
 
         double _next_hue(const size_t& i){
-            if(i>=0 && i<12){
-                return i*30.0;
-            }else{
-                return 0.0;//todo: return in between colors indefinitely
-            }
+            return mvis::util::ith_middle(i, 0.0, 360.0);
         }
 
         void addFunction(const char* function_name,
@@ -201,6 +201,7 @@ namespace mvis{
 
             int k=0;
             for(int i=0; i<function_group_list.size();++i) {
+                int c=0;
                 for(int j=0; j<function_group_list[i].first.size();++j, ++k){
                     vtkPlot *line = chart->AddPlot(vtkChart::LINE);
 
@@ -210,11 +211,39 @@ namespace mvis{
                     line->SetInputData(table, 0, k+1);
 #endif
 
-                    double val = std::min(((double)(2*j)/(function_group_list[i].first.size())), (double)1.0);
-                    double sat = std::min(1-(((double)(2*j)/(function_group_list[i].first.size()))-1), (double)1.0);
-                    double hue = function_group_list[i].second;
+                    //todo: make this its own function
+                    double hue, sat, val;
+                    do {
+                        double mid = mvis::util::ith_middle(j + c, 0.0, 160.0);
+                        hue = function_group_list[i].second;
+                        val = std::max(std::min(mid, 100.0), 20.0);
+                        sat = 100.0 - std::max(mid - 80.0, 0.0);
+                        std::cout<<"val:"<<val<<"\n";
+                        std::cout<<"sat:"<<sat<<"\n";
+                        std::array<double, 3> rgb = mvis::color::get_rgb_from_hsv(hue, sat, val);
+                        //std::cout<<"rgb:"<<rgb<<"\n";
+                        double lum_fg = mvis::color::get_luminance_from_rgb(rgb[0]/255.0,rgb[1]/255.0,rgb[2]/255.0);
+                        double lum_bg = mvis::color::get_luminance_from_rgb(bg_red/255.0, bg_green/255.0, bg_blue/255.0);
 
-                    std::array<double, 3> rgb = mvis::color::get_rgb_from_hsv(hue, sat*60+40, val*80+20);
+                        std::cout<<"lum_fg:"<<lum_fg<<"\n";
+                        std::cout<<"lum_bg:"<<lum_bg<<"\n";
+                        double ratio=0;
+                        if(lum_fg >= lum_bg){
+                            ratio = (lum_fg+.05) / (lum_bg + .05);
+                        } else{
+                            ratio = (lum_bg + .05) / (lum_fg + .05);
+                        }
+                        std::cout<<"ratio: "<<ratio<<"\n";
+
+                        if(ratio<3.0){
+                            ++c;
+                        }else{
+                            break;
+                        }
+
+                    }while(true);
+
+                    std::array<double, 3> rgb = mvis::color::get_rgb_from_hsv(hue, sat, val);
 
                     line->SetColor((unsigned char)mvis::color::_255_limit(rgb[0]),
                                    (unsigned char)mvis::color::_255_limit(rgb[1]),
@@ -250,6 +279,7 @@ int main() {
 
     mvis::Graph<float> graph;
 
+    graph.addFunctionGroup(0.0);
     graph.addFunction("fib", mvis::fib<float>);
     graph.addFunction("x", [](const float& x){return x;});
     graph.addFunction("x^2", [](const float& x){return x*x;});

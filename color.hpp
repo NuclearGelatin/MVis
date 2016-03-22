@@ -21,6 +21,32 @@ namespace mvis{
             return (Number)0.3*r + (Number)0.59*g + (Number)0.11*b;
         }
 
+        template<class Number>
+        Number get_luminance_from_rgb(const Number& red, const Number& green, const Number& blue){
+            Number r=red; Number g = green; Number b = blue;
+            if(r<=0.03928)
+                r=r/12.92;
+            else
+                r = std::pow((r+0.055)/1.055, 2.4);
+
+            if(g<=0.03928)
+                g=g/12.92;
+            else
+                g = std::pow((g+0.055)/1.055, 2.4);
+
+            if(b<=0.03928)
+                b=b/12.92;
+            else
+                b = std::pow((b+0.055)/1.055, 2.4);
+
+            return (0.2126*r)+(0.7152*g)+(0.0722*b);
+        }
+
+        template<class Number>
+        Number get_luminance_from_rgb(const std::array<Number, 3>& rgb){
+            return get_luminance_from_rgb(rgb[0], rgb[1], rgb[2]);
+        }
+
         /*
          * Takes in red, green, and blue color values from 0-255 of any same numeric type.
          * Returns hue from 0-360 in same numeric type.
